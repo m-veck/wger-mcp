@@ -103,6 +103,11 @@ MCP_AUTH=none
 |------|-------------|
 | `whoami` | Show wger user profile bound to the configured API token |
 | `list_routines` / `get_routine` | New-model training routines |
+| `create_routine(name, description?, start?, end?, fit_in_week?)` | Create a routine |
+| `update_routine(routine_id, name?, description?, start?, end?, fit_in_week?)` | Patch a routine |
+| `add_routine_day(routine_id, name, order, description?, is_rest?, day_type?)` | Add a training day to a routine |
+| `add_slot_to_day(day_id, order, sets?, rest_seconds?)` | Add an exercise slot to a day |
+| `attach_exercise_to_slot(slot_id, exercise_id, order?, reps?, weight_kg?)` | Attach an exercise to a slot (resolves exercise UUID) |
 | `list_workouts` | Legacy workout plans |
 | `search_exercises(query, language, limit)` | Find exercises by name (ISO 639-1 language code) |
 | `get_exercise(id)` | Full exercise detail: muscles, equipment, instructions |

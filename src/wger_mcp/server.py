@@ -68,6 +68,134 @@ def build_app(settings: Settings) -> Starlette:
             return _err(exc)
 
     @mcp.tool()
+    async def create_routine(
+        name: Annotated[str, Field(min_length=1, max_length=255)],
+        description: str = "",
+        start: date | None = None,
+        end: date | None = None,
+        fit_in_week: bool = False,
+    ) -> dict[str, Any]:
+        """Create a training routine. Start defaults to today."""
+        payload: dict[str, Any] = {
+            "name": name,
+            "description": description,
+            "start": (start or date.today()).isoformat(),
+            "fit_in_week": fit_in_week,
+        }
+        if end is not None:
+            payload["end"] = end.isoformat()
+        try:
+            return await client.post("routine/", json=payload)
+        except WgerError as exc:
+            return _err(exc)
+
+    @mcp.tool()
+    async def update_routine(
+        routine_id: int,
+        name: str | None = None,
+        description: str | None = None,
+        start: date | None = None,
+        end: date | None = None,
+        fit_in_week: bool | None = None,
+    ) -> dict[str, Any]:
+        """Patch a routine. Only provided fields are sent."""
+        payload: dict[str, Any] = {}
+        if name is not None:
+            payload["name"] = name
+        if description is not None:
+            payload["description"] = description
+        if start is not None:
+            payload["start"] = start.isoformat()
+        if end is not None:
+            payload["end"] = end.isoformat()
+        if fit_in_week is not None:
+            payload["fit_in_week"] = fit_in_week
+        if not payload:
+            return {"error": True, "status": 400, "detail": "no fields to update"}
+        try:
+            return await client.patch(f"routine/{routine_id}/", json=payload)
+        except WgerError as exc:
+            return _err(exc)
+
+    @mcp.tool()
+    async def add_routine_day(
+        routine_id: int,
+        name: Annotated[str, Field(min_length=1, max_length=255)],
+        order: Annotated[int, Field(ge=1, le=100)],
+        description: str = "",
+        is_rest: bool = False,
+        day_type: str = "standard",
+    ) -> dict[str, Any]:
+        """Add a training day to a routine."""
+        payload: dict[str, Any] = {
+            "routine": routine_id,
+            "order": order,
+            "name": name,
+            "description": description,
+            "is_rest": is_rest,
+            "type": day_type,
+        }
+        try:
+            return await client.post("day/", json=payload)
+        except WgerError as exc:
+            return _err(exc)
+
+    @mcp.tool()
+    async def add_slot_to_day(
+        day_id: int,
+        order: Annotated[int, Field(ge=1, le=100)],
+        sets: Annotated[int | None, Field(ge=1, le=50)] = None,
+        rest_seconds: Annotated[int | None, Field(ge=0, le=3600)] = None,
+    ) -> dict[str, Any]:
+        """Add an exercise slot (grouping) to a day."""
+        payload: dict[str, Any] = {"day": day_id, "order": order}
+        if sets is not None:
+            payload["sets"] = sets
+        if rest_seconds is not None:
+            payload["rest"] = rest_seconds
+        try:
+            return await client.post("slot/", json=payload)
+        except WgerError as exc:
+            return _err(exc)
+
+    @mcp.tool()
+    async def attach_exercise_to_slot(
+        slot_id: int,
+        exercise_id: int,
+        order: Annotated[int, Field(ge=1, le=100)] = 1,
+        reps: Annotated[int | None, Field(ge=1, le=1000)] = None,
+        weight_kg: Annotated[float | None, Field(ge=0, le=1000)] = None,
+    ) -> dict[str, Any]:
+        """Attach an exercise to a slot. exercise_id is the numeric wger id; the
+        slot-entry endpoint requires the exercise UUID, which is resolved via
+        /exerciseinfo/{id}/."""
+        try:
+            info = await client.get(f"exerciseinfo/{exercise_id}/")
+        except WgerError as exc:
+            return _err(exc)
+        uuid = info.get("uuid") if isinstance(info, dict) else None
+        if not uuid:
+            return {
+                "error": True,
+                "status": 404,
+                "detail": f"exercise {exercise_id} has no uuid",
+            }
+        payload: dict[str, Any] = {
+            "slot": slot_id,
+            "exercise": uuid,
+            "order": order,
+        }
+        if reps is not None:
+            payload["reps"] = reps
+        if weight_kg is not None:
+            payload["weight"] = weight_kg
+            payload["weight_unit"] = 1
+        try:
+            return await client.post("slot-entry/", json=payload)
+        except WgerError as exc:
+            return _err(exc)
+
+    @mcp.tool()
     async def list_workouts(
         limit: Annotated[int, Field(ge=1, le=200)] = 20,
     ) -> list[dict[str, Any]]:
