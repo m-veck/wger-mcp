@@ -121,6 +121,8 @@ MCP_AUTH=none
 | `update_body_weight_entry(entry_id, weight_kg?, when?)` / `delete_body_weight_entry(entry_id)` | Edit / remove a body-weight entry |
 | `exercise_history(exercise_id, days?, limit?)` | Per-session aggregates (sets, reps, top weight, volume) for one exercise |
 | `personal_records(exercise_id?, days?)` | Max weight, max reps, Epley-estimated 1RM per exercise |
+| `volume_trend(days?, bucket, metrics?, group_by?, exercise_id?)` | Bucketed (day/week/month) volume; group_by none/exercise/muscle/category |
+| `compare_periods(window_days?, gap_days?, metrics?, group_by?)` | Rolling window A vs B (delta + delta%) |
 | `nutrition_summary(when?, plan_id?)` | Daily kcal/protein/carbs/fat from diary entries |
 | `list_categories` / `list_equipment` / `list_muscles` | Reference data |
 | `search_exercises_by_filter(equipment_id?, muscle_id?, category_id?, language?, limit?)` | Filtered exercise lookup (e.g. Dumbbell + Back) |
