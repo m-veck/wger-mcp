@@ -17,6 +17,15 @@ uv run wger-mcp
 
 Server listens on `http://0.0.0.0:8765`, MCP endpoint at `/mcp`.
 
+## Two credentials, two roles
+
+`wger-mcp` deals with two unrelated credentials. Mixing them up is the #1 source of `401`s:
+
+- `WGER_API_TOKEN` — wger's DRF token, used **outbound** by the MCP server to call the wger REST API.
+- `MCP_API_KEYS` — only when `MCP_AUTH=api_key`; used by **inbound** clients (Claude Desktop, scripts, …) to authenticate to MCP.
+
+See [docs/api-keys.md](docs/api-keys.md) for how to generate, rotate, and why these are separate.
+
 ## Inbound auth strategies
 
 Pick one with `MCP_AUTH=`. The server gates **every** request to `/mcp/*` according to that strategy. `/health` is always public.
