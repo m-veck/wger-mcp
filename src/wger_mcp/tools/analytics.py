@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections import defaultdict
 from datetime import date, timedelta
 from typing import Annotated, Any
@@ -14,6 +15,11 @@ from .common import bad_request, err
 
 VOLUME_METRICS: tuple[str, ...] = ("volume", "sets", "reps", "top_weight", "est_1rm")
 GROUP_BY_OPTIONS: tuple[str, ...] = ("none", "exercise", "muscle", "category")
+
+# Exercise metadata (name/category/muscles) is effectively static per wger
+# deployment; cache it process-wide across tool invocations.
+_EX_META_CACHE: dict[int, dict[str, Any]] = {}
+_EX_META_CONCURRENCY = 8
 
 
 def _epley(weight: float, reps: int) -> float:
@@ -64,13 +70,20 @@ async def _load_ex_meta(
         eid = entry.get("exercise") or entry.get("exercise_base")
         if isinstance(eid, int):
             ex_ids.add(eid)
-    cache: dict[int, dict[str, Any]] = {}
-    for eid in ex_ids:
-        try:
-            cache[eid] = await client.get(f"exerciseinfo/{eid}/")
-        except WgerError:
-            cache[eid] = {}
-    return cache
+    missing = [eid for eid in ex_ids if eid not in _EX_META_CACHE]
+    if missing:
+        sem = asyncio.Semaphore(_EX_META_CONCURRENCY)
+
+        async def _fetch(eid: int) -> tuple[int, dict[str, Any]]:
+            async with sem:
+                try:
+                    return eid, await client.get(f"exerciseinfo/{eid}/")
+                except WgerError:
+                    return eid, {}
+
+        for eid, meta in await asyncio.gather(*[_fetch(e) for e in missing]):
+            _EX_META_CACHE[eid] = meta
+    return {eid: _EX_META_CACHE[eid] for eid in ex_ids}
 
 
 def _new_metric_bucket() -> dict[str, float]:
@@ -372,20 +385,33 @@ def register(mcp: FastMCP, client: WgerClient) -> None:
         b_to = a_from - timedelta(days=1 + gap_days)
         b_from = b_to - timedelta(days=window_days - 1)
 
+        # Two range queries instead of one spanning the gap — when gap_days
+        # is non-trivial we'd otherwise fetch (and discard) the gap window.
         try:
-            logs = await client.paginate(
-                "workoutlog/",
-                params={
-                    "date__gte": b_from.isoformat(),
-                    "date__lte": a_to.isoformat(),
-                    "ordering": "date",
-                },
-                limit=5000,
+            logs_a, logs_b = await asyncio.gather(
+                client.paginate(
+                    "workoutlog/",
+                    params={
+                        "date__gte": a_from.isoformat(),
+                        "date__lte": a_to.isoformat(),
+                        "ordering": "date",
+                    },
+                    limit=5000,
+                ),
+                client.paginate(
+                    "workoutlog/",
+                    params={
+                        "date__gte": b_from.isoformat(),
+                        "date__lte": b_to.isoformat(),
+                        "ordering": "date",
+                    },
+                    limit=5000,
+                ),
             )
         except WgerError as exc:
             return err(exc)
 
-        ex_cache = await _load_ex_meta(client, logs, group_by)
+        ex_cache = await _load_ex_meta(client, logs_a + logs_b, group_by)
         per_period: dict[str, dict[tuple | None, dict[str, float]]] = {
             "a": defaultdict(_new_metric_bucket),
             "b": defaultdict(_new_metric_bucket),
@@ -394,26 +420,16 @@ def register(mcp: FastMCP, client: WgerClient) -> None:
             "a": _new_metric_bucket(),
             "b": _new_metric_bucket(),
         }
-        for entry in logs:
-            ex_id = entry.get("exercise") or entry.get("exercise_base")
-            d_str = entry.get("date")
-            if ex_id is None or not d_str:
-                continue
-            try:
-                d = date.fromisoformat(d_str)
-            except ValueError:
-                continue
-            if a_from <= d <= a_to:
-                period = "a"
-            elif b_from <= d <= b_to:
-                period = "b"
-            else:
-                continue
-            weight = _safe_float(entry.get("weight"))
-            reps = entry.get("reps") or 0
-            _accumulate(totals[period], reps, weight)
-            for group in _groups_for(ex_id, group_by, ex_cache):
-                _accumulate(per_period[period][group], reps, weight)
+        for period, logs in (("a", logs_a), ("b", logs_b)):
+            for entry in logs:
+                ex_id = entry.get("exercise") or entry.get("exercise_base")
+                if ex_id is None:
+                    continue
+                weight = _safe_float(entry.get("weight"))
+                reps = entry.get("reps") or 0
+                _accumulate(totals[period], reps, weight)
+                for group in _groups_for(ex_id, group_by, ex_cache):
+                    _accumulate(per_period[period][group], reps, weight)
 
         all_groups: set[tuple | None] = set(per_period["a"].keys()) | set(per_period["b"].keys())
 

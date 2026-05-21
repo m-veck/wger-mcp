@@ -99,6 +99,37 @@ def register(mcp: FastMCP, client: WgerClient) -> None:
             return err(exc)
 
     @mcp.tool()
+    async def search_ingredient_by_barcode(
+        barcode: Annotated[str, Field(min_length=4, max_length=32)],
+        limit: Annotated[int, Field(ge=1, le=20)] = 5,
+    ) -> list[dict[str, Any]]:
+        """Look up ingredients by EAN/UPC barcode (exact match on the wger
+        `code` field). Typically returns 0 or 1 result — much more precise
+        than name search."""
+        try:
+            results = await client.paginate(
+                "ingredient/", params={"code": barcode}, limit=limit
+            )
+        except WgerError as exc:
+            return [err(exc)]
+        shaped: list[dict[str, Any]] = []
+        for ing in results:
+            if not isinstance(ing, dict):
+                continue
+            shaped.append({
+                "id": ing.get("id"),
+                "uuid": ing.get("uuid"),
+                "name": ing.get("name"),
+                "code": ing.get("code"),
+                "brand": ing.get("brand"),
+                "energy": ing.get("energy"),
+                "protein": ing.get("protein"),
+                "carbohydrates": ing.get("carbohydrates"),
+                "fat": ing.get("fat"),
+            })
+        return shaped
+
+    @mcp.tool()
     async def list_categories(
         limit: Annotated[int, Field(ge=1, le=500)] = 100,
     ) -> list[dict[str, Any]]:

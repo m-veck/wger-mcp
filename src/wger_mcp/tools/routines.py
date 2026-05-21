@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import date
 from typing import Annotated, Any
 
@@ -117,21 +118,25 @@ def register(mcp: FastMCP, client: WgerClient) -> None:
     ) -> dict[str, Any]:
         """Fetch per-iteration configs for a slot entry. kinds filters which
         ones to read (e.g. ['sets','reps','weight']); default = all 10."""
-        out: dict[str, Any] = {"slot_entry_id": slot_entry_id}
         targets = kinds or list(SLOT_CONFIG_PATHS.keys())
-        for kind in targets:
+
+        async def _fetch(kind: str) -> tuple[str, Any]:
             path = SLOT_CONFIG_PATHS.get(kind)
             if not path:
-                out[kind] = {"error": True, "detail": f"unknown kind '{kind}'"}
-                continue
+                return kind, {"error": True, "detail": f"unknown kind '{kind}'"}
             try:
-                out[kind] = await client.paginate(
+                return kind, await client.paginate(
                     path,
                     params={"slot_entry": slot_entry_id, "ordering": "iteration"},
                     limit=200,
                 )
             except WgerError as exc:
-                out[kind] = err(exc)
+                return kind, err(exc)
+
+        results = await asyncio.gather(*[_fetch(k) for k in targets])
+        out: dict[str, Any] = {"slot_entry_id": slot_entry_id}
+        for kind, value in results:
+            out[kind] = value
         return out
 
     @mcp.tool()
