@@ -37,7 +37,11 @@ def build_app(settings: Settings) -> Starlette:
         transport_security=transport_security,
     )
 
-    client = WgerClient(settings.wger_api_root, settings.wger_api_token)
+    client = WgerClient(
+        settings.wger_api_root,
+        settings.wger_api_token,
+        ca_bundle=settings.wger_ca_bundle,
+    )
     register_all(mcp, client)
 
     @contextlib.asynccontextmanager

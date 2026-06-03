@@ -35,6 +35,10 @@ class Settings(BaseSettings):
     # ---------- upstream wger ----------
     wger_base_url: HttpUrl
     wger_api_token: str
+    # Path to a CA bundle for verifying the upstream wger TLS cert. Use this
+    # when wger sits behind an internal CA (e.g. Step CA) the container does
+    # not trust by default. None → verify against the system/certifi bundle.
+    wger_ca_bundle: str | None = None
 
     # ---------- inbound auth strategy ----------
     mcp_auth: AuthStrategy = AuthStrategy.api_key

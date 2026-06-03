@@ -19,10 +19,18 @@ class WgerError(RuntimeError):
 
 
 class WgerClient:
-    def __init__(self, base_url: str, token: str, *, timeout: float = 20.0) -> None:
+    def __init__(
+        self,
+        base_url: str,
+        token: str,
+        *,
+        timeout: float = 20.0,
+        ca_bundle: str | None = None,
+    ) -> None:
         self._client = httpx.AsyncClient(
             base_url=base_url,
             timeout=timeout,
+            verify=ca_bundle if ca_bundle else True,
             headers={
                 "Authorization": f"Token {token}",
                 "Accept": "application/json",
