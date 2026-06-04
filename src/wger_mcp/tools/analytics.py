@@ -152,7 +152,7 @@ def register(mcp: FastMCP, client: WgerClient) -> None:
             ex_id = entry.get("exercise") or entry.get("exercise_base")
             if ex_id is None:
                 continue
-            reps = entry.get("reps") or 0
+            reps = entry.get("repetitions") or 0
             weight = _safe_float(entry.get("weight"))
             bucket = per_exercise[ex_id]
             bucket["sets"] += 1
@@ -203,7 +203,7 @@ def register(mcp: FastMCP, client: WgerClient) -> None:
         )
         for entry in logs:
             weight = _safe_float(entry.get("weight"))
-            reps = entry.get("reps") or 0
+            reps = entry.get("repetitions") or 0
             d = entry.get("date") or ""
             b = sessions[d]
             b["sets"] += 1
@@ -253,7 +253,7 @@ def register(mcp: FastMCP, client: WgerClient) -> None:
             if ex_id is None:
                 continue
             weight = _safe_float(entry.get("weight"))
-            reps = entry.get("reps") or 0
+            reps = entry.get("repetitions") or 0
             est_1rm = _epley(weight, reps)
             rec = per_ex.setdefault(
                 ex_id,
@@ -336,7 +336,7 @@ def register(mcp: FastMCP, client: WgerClient) -> None:
             if ex_id is None or not d_str:
                 continue
             weight = _safe_float(entry.get("weight"))
-            reps = entry.get("reps") or 0
+            reps = entry.get("repetitions") or 0
             try:
                 d = date.fromisoformat(d_str)
             except ValueError:
@@ -426,7 +426,7 @@ def register(mcp: FastMCP, client: WgerClient) -> None:
                 if ex_id is None:
                     continue
                 weight = _safe_float(entry.get("weight"))
-                reps = entry.get("reps") or 0
+                reps = entry.get("repetitions") or 0
                 _accumulate(totals[period], reps, weight)
                 for group in _groups_for(ex_id, group_by, ex_cache):
                     _accumulate(per_period[period][group], reps, weight)

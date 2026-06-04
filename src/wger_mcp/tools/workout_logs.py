@@ -34,7 +34,7 @@ def register(mcp: FastMCP, client: WgerClient) -> None:
         """Log a completed set (workoutlog). Uses today if no date given."""
         payload = {
             "exercise": exercise_id,
-            "reps": reps,
+            "repetitions": reps,
             "weight": weight_kg,
             "date": (workout_log_date or date.today()).isoformat(),
         }
@@ -84,7 +84,7 @@ def register(mcp: FastMCP, client: WgerClient) -> None:
         """Patch a workout log entry. Only provided fields are sent."""
         payload: dict[str, Any] = {}
         if reps is not None:
-            payload["reps"] = reps
+            payload["repetitions"] = reps
         if weight_kg is not None:
             payload["weight"] = weight_kg
         if rir is not None:
