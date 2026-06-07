@@ -129,6 +129,15 @@ def _safe_float(value: Any) -> float:
         return 0.0
 
 
+def _safe_int(value: Any) -> int:
+    # wger returns `repetitions` as a decimal string ("10.00"); parse via
+    # float first so "10.00" doesn't raise, then collapse to int reps.
+    try:
+        return int(float(value or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
 def register(mcp: FastMCP, client: WgerClient) -> None:
     @mcp.tool()
     async def weekly_summary(
@@ -152,7 +161,7 @@ def register(mcp: FastMCP, client: WgerClient) -> None:
             ex_id = entry.get("exercise") or entry.get("exercise_base")
             if ex_id is None:
                 continue
-            reps = entry.get("repetitions") or 0
+            reps = _safe_int(entry.get("repetitions"))
             weight = _safe_float(entry.get("weight"))
             bucket = per_exercise[ex_id]
             bucket["sets"] += 1
@@ -203,7 +212,7 @@ def register(mcp: FastMCP, client: WgerClient) -> None:
         )
         for entry in logs:
             weight = _safe_float(entry.get("weight"))
-            reps = entry.get("repetitions") or 0
+            reps = _safe_int(entry.get("repetitions"))
             d = entry.get("date") or ""
             b = sessions[d]
             b["sets"] += 1
@@ -253,7 +262,7 @@ def register(mcp: FastMCP, client: WgerClient) -> None:
             if ex_id is None:
                 continue
             weight = _safe_float(entry.get("weight"))
-            reps = entry.get("repetitions") or 0
+            reps = _safe_int(entry.get("repetitions"))
             est_1rm = _epley(weight, reps)
             rec = per_ex.setdefault(
                 ex_id,
@@ -336,7 +345,7 @@ def register(mcp: FastMCP, client: WgerClient) -> None:
             if ex_id is None or not d_str:
                 continue
             weight = _safe_float(entry.get("weight"))
-            reps = entry.get("repetitions") or 0
+            reps = _safe_int(entry.get("repetitions"))
             try:
                 d = date.fromisoformat(d_str)
             except ValueError:
@@ -385,6 +394,12 @@ def register(mcp: FastMCP, client: WgerClient) -> None:
         b_to = a_from - timedelta(days=1 + gap_days)
         b_from = b_to - timedelta(days=window_days - 1)
 
+        # workoutlog.date is a full datetime, so a date-only `date__lte=<day>`
+        # resolves to 00:00:00 and drops every log on that day. Bound on the
+        # next midnight instead to include the whole upper-bound day.
+        a_to_param = (a_to + timedelta(days=1)).isoformat()
+        b_to_param = (b_to + timedelta(days=1)).isoformat()
+
         # Two range queries instead of one spanning the gap — when gap_days
         # is non-trivial we'd otherwise fetch (and discard) the gap window.
         try:
@@ -393,7 +408,7 @@ def register(mcp: FastMCP, client: WgerClient) -> None:
                     "workoutlog/",
                     params={
                         "date__gte": a_from.isoformat(),
-                        "date__lte": a_to.isoformat(),
+                        "date__lte": a_to_param,
                         "ordering": "date",
                     },
                     limit=5000,
@@ -402,7 +417,7 @@ def register(mcp: FastMCP, client: WgerClient) -> None:
                     "workoutlog/",
                     params={
                         "date__gte": b_from.isoformat(),
-                        "date__lte": b_to.isoformat(),
+                        "date__lte": b_to_param,
                         "ordering": "date",
                     },
                     limit=5000,
@@ -426,7 +441,7 @@ def register(mcp: FastMCP, client: WgerClient) -> None:
                 if ex_id is None:
                     continue
                 weight = _safe_float(entry.get("weight"))
-                reps = entry.get("repetitions") or 0
+                reps = _safe_int(entry.get("repetitions"))
                 _accumulate(totals[period], reps, weight)
                 for group in _groups_for(ex_id, group_by, ex_cache):
                     _accumulate(per_period[period][group], reps, weight)

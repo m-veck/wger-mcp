@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 from typing import Annotated, Any
 
 from mcp.server.fastmcp import FastMCP
@@ -57,7 +57,11 @@ def register(mcp: FastMCP, client: WgerClient) -> None:
         if date_from is not None:
             params["date__gte"] = date_from.isoformat()
         if date_to is not None:
-            params["date__lte"] = date_to.isoformat()
+            # workoutlog.date is a full datetime in this wger version, so a
+            # date-only `date__lte=<day>` resolves to 00:00:00 and silently
+            # drops every log on date_to itself. Bound on the next midnight so
+            # the whole date_to day is included.
+            params["date__lte"] = (date_to + timedelta(days=1)).isoformat()
         if exercise_id is not None:
             params["exercise"] = exercise_id
         try:
